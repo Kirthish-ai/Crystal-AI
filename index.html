@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Crystal AI — Your Intelligent Assistant</title>
+  <meta name="description" content="Crystal AI is a premium AI chat application powered by Google Gemini. Ask any question and get intelligent, accurate responses instantly." />
+  <meta name="theme-color" content="#0d0d0f" />
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+
+  <!-- Marked.js for Markdown -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+  <!-- Highlight.js for Code -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+
+  <!-- DOMPurify for XSS safety -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.6/purify.min.js"></script>
+
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- ====== SIDEBAR ====== -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <div class="logo">
+        <div class="logo-icon">
+          <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <polygon points="16,2 28,9 28,23 16,30 4,23 4,9" fill="url(#crystalGrad)" opacity="0.9"/>
+            <polygon points="16,8 22,12 22,20 16,24 10,20 10,12" fill="none" stroke="rgba(255,255,255,0.3)" stroke-width="0.5"/>
+            <line x1="16" y1="2" x2="16" y2="30" stroke="rgba(255,255,255,0.2)" stroke-width="0.5"/>
+            <line x1="4" y1="9" x2="28" y2="23" stroke="rgba(255,255,255,0.2)" stroke-width="0.5"/>
+            <line x1="28" y1="9" x2="4" y2="23" stroke="rgba(255,255,255,0.2)" stroke-width="0.5"/>
+            <defs>
+              <linearGradient id="crystalGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" style="stop-color:#a78bfa"/>
+                <stop offset="50%" style="stop-color:#818cf8"/>
+                <stop offset="100%" style="stop-color:#38bdf8"/>
+              </linearGradient>
+            </defs>
+          </svg>
+        </div>
+        <span class="logo-text">Crystal AI</span>
+      </div>
+      <button class="icon-btn sidebar-close-btn" id="sidebarToggle" title="Toggle sidebar (Ctrl+/)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      </button>
+    </div>
+
+    <button class="new-chat-btn" id="newChatBtn">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      New Chat
+    </button>
+
+    <div class="sidebar-section-label">Recent</div>
+    <div class="history-list" id="historyList">
+      <!-- dynamically populated -->
+    </div>
+
+    <div class="sidebar-footer">
+      <button class="footer-btn" id="clearHistoryBtn" title="Clear all history">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+        Clear History
+      </button>
+      <button class="footer-btn" id="settingsBtn" title="Settings">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        Settings
+      </button>
+    </div>
+  </aside>
+
+  <!-- ====== MAIN AREA ====== -->
+  <main class="main" id="main">
+
+    <!-- Top Bar -->
+    <header class="topbar">
+      <button class="icon-btn" id="mobileSidebarToggle" title="Toggle sidebar">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      </button>
+      <div class="topbar-center">
+        <span class="model-badge">
+          <span class="model-dot"></span>
+          Gemini 2.0 Flash
+        </span>
+      </div>
+      <div class="topbar-actions">
+        <button class="icon-btn" id="exportBtn" title="Export conversation">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- Chat Messages -->
+    <div class="chat-area" id="chatArea">
+
+      <!-- Welcome Screen -->
+      <div class="welcome-screen" id="welcomeScreen">
+        <div class="welcome-logo">
+          <svg viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg" width="80" height="80">
+            <polygon points="40,4 72,22 72,58 40,76 8,58 8,22" fill="url(#wGrad)" opacity="0.85"/>
+            <polygon points="40,18 56,28 56,52 40,62 24,52 24,28" fill="none" stroke="rgba(255,255,255,0.2)" stroke-width="1"/>
+            <line x1="40" y1="4" x2="40" y2="76" stroke="rgba(255,255,255,0.15)" stroke-width="0.8"/>
+            <line x1="8" y1="22" x2="72" y2="58" stroke="rgba(255,255,255,0.15)" stroke-width="0.8"/>
+            <line x1="72" y1="22" x2="8" y2="58" stroke="rgba(255,255,255,0.15)" stroke-width="0.8"/>
+            <circle cx="40" cy="40" r="8" fill="rgba(255,255,255,0.15)"/>
+            <defs>
+              <linearGradient id="wGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" style="stop-color:#a78bfa"/>
+                <stop offset="50%" style="stop-color:#818cf8"/>
+                <stop offset="100%" style="stop-color:#38bdf8"/>
+              </linearGradient>
+            </defs>
+          </svg>
+        </div>
+        <h1 class="welcome-title">Hello, I'm Crystal</h1>
+        <p class="welcome-subtitle">Your AI-powered assistant. Ask me anything.</p>
+        <div class="suggestion-grid">
+          <button class="suggestion-card" data-prompt="Explain quantum computing in simple terms">
+            <span class="suggestion-icon">⚛️</span>
+            <span>Explain quantum computing in simple terms</span>
+          </button>
+          <button class="suggestion-card" data-prompt="Write a Python function to sort a list of dictionaries by a key">
+            <span class="suggestion-icon">💻</span>
+            <span>Write a Python sorting function</span>
+          </button>
+          <button class="suggestion-card" data-prompt="What are the best practices for modern web development in 2025?">
+            <span class="suggestion-icon">🌐</span>
+            <span>Best web dev practices in 2025</span>
+          </button>
+          <button class="suggestion-card" data-prompt="Help me brainstorm a unique startup idea in the AI space">
+            <span class="suggestion-icon">💡</span>
+            <span>Brainstorm an AI startup idea</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Messages Container -->
+      <div class="messages-container" id="messagesContainer">
+        <!-- messages injected here -->
+      </div>
+
+    </div>
+
+    <!-- Input Area -->
+    <div class="input-wrapper">
+      <div class="input-container" id="inputContainer">
+        <textarea
+          id="userInput"
+          class="chat-input"
+          placeholder="Ask Crystal anything..."
+          rows="1"
+          autocomplete="off"
+          spellcheck="true"
+        ></textarea>
+        <div class="input-actions">
+          <span class="char-count" id="charCount">0</span>
+          <button class="send-btn" id="sendBtn" title="Send message (Enter)">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+          </button>
+        </div>
+      </div>
+      <p class="input-hint">Crystal may make mistakes. Powered by Google Gemini · <kbd>Enter</kbd> to send · <kbd>Shift+Enter</kbd> for new line</p>
+    </div>
+
+  </main>
+
+  <!-- ====== SETTINGS MODAL ====== -->
+  <div class="modal-overlay" id="settingsModal">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+      <div class="modal-header">
+        <h2 id="settingsTitle">Settings</h2>
+        <button class="icon-btn modal-close" id="settingsClose">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="setting-group">
+          <label class="setting-label" for="apiKeyInput">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
+            Gemini API Key
+          </label>
+          <div class="api-key-wrapper">
+            <input type="password" id="apiKeyInput" class="setting-input" placeholder="AIza..." autocomplete="off" />
+            <button class="icon-btn toggle-eye" id="toggleApiKey" title="Show/hide key">
+              <svg id="eyeIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>
+          </div>
+          <p class="setting-hint">Get your free API key at <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener">aistudio.google.com</a>. Keys are stored only in your browser.</p>
+        </div>
+
+        <div class="setting-group">
+          <label class="setting-label">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M8 12h8M12 8v8"/></svg>
+            Model
+          </label>
+          <select class="setting-input" id="modelSelect">
+            <option value="gemini-2.0-flash">Gemini 2.0 Flash (Recommended)</option>
+            <option value="gemini-1.5-flash">Gemini 1.5 Flash</option>
+            <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
+          </select>
+        </div>
+
+        <div class="setting-group">
+          <label class="setting-label">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            System Prompt (optional)
+          </label>
+          <textarea class="setting-input" id="systemPromptInput" rows="3" placeholder="You are Crystal, a helpful AI assistant..."></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-secondary" id="settingsCancelBtn">Cancel</button>
+        <button class="btn-primary" id="saveSettingsBtn">Save Settings</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ====== TOAST ====== -->
+  <div class="toast" id="toast"></div>
+
+  <script src="script.js"></script>
+</body>
+</html>
