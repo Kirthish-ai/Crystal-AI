@@ -1,575 +1,588 @@
-/* ============================================================
-   Crystal AI — script.js
-   Powered by Google Gemini API
-   ============================================================ */
+// ============================================================
+//  Crystal AI Chat — script.js
+//  Google Gemini 2.0 Flash · Vanilla JS · No build step
+// ============================================================
 
-'use strict';
+/* ── Constants ─────────────────────────────────────────────── */
+const GEMINI_MODEL  = 'gemini-2.0-flash';
+const API_BASE      = 'https://generativelanguage.googleapis.com/v1beta/models';
+const STORAGE_KEY_API   = 'crystal_api_key';
+const STORAGE_KEY_HIST  = 'crystal_history';
 
-// ── Constants ──────────────────────────────────────────────
-const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
-const STORAGE_KEY_SETTINGS = 'crystal_settings';
-const STORAGE_KEY_HISTORY  = 'crystal_history';
-const MAX_HISTORY_ITEMS    = 50;
+/* ── State ──────────────────────────────────────────────────── */
+let apiKey          = '';
+let sessions        = [];     // [{ id, title, messages:[{role,text,time}] }]
+let activeSession   = null;   // current session object
+let isStreaming     = false;
 
-// ── State ──────────────────────────────────────────────────
-let settings = {
-  apiKey:       '',
-  model:        'gemini-2.0-flash',
-  systemPrompt: 'You are Crystal, a highly intelligent, friendly AI assistant. Provide clear, helpful, and accurate responses. Format your answers with markdown when it improves readability.'
-};
+/* ── DOM refs ───────────────────────────────────────────────── */
+const chatContainer  = document.getElementById('chat-container');
+const welcomeScreen  = document.getElementById('welcome-screen');
+const userInput      = document.getElementById('user-input');
+const btnSend        = document.getElementById('btn-send');
+const btnNewChat     = document.getElementById('btn-new-chat');
+const btnClearAll    = document.getElementById('btn-clear-all');
+const btnSidebarTog  = document.getElementById('btn-sidebar-toggle');
+const btnExport      = document.getElementById('btn-export');
+const historyList    = document.getElementById('history-list');
+const sidebar        = document.getElementById('sidebar');
+const apiModal       = document.getElementById('api-key-modal');
+const apiKeyInput    = document.getElementById('api-key-input');
+const btnSaveKey     = document.getElementById('btn-save-key');
+const btnToggleKey   = document.getElementById('btn-toggle-key');
+const toast          = document.getElementById('toast');
 
-let conversationHistory = [];   // all saved chats  [{id, title, messages, ts}]
-let activeConvId        = null; // currently-viewed chat id
-let activeMsgs          = [];   // messages in current chat
-let isGenerating        = false;
-
-// ── DOM refs ───────────────────────────────────────────────
-const sidebar            = document.getElementById('sidebar');
-const sidebarToggle      = document.getElementById('sidebarToggle');
-const mobileSidebarToggle= document.getElementById('mobileSidebarToggle');
-const newChatBtn         = document.getElementById('newChatBtn');
-const historyList        = document.getElementById('historyList');
-const clearHistoryBtn    = document.getElementById('clearHistoryBtn');
-const settingsBtn        = document.getElementById('settingsBtn');
-const exportBtn          = document.getElementById('exportBtn');
-
-const chatArea           = document.getElementById('chatArea');
-const welcomeScreen      = document.getElementById('welcomeScreen');
-const messagesContainer  = document.getElementById('messagesContainer');
-
-const userInput          = document.getElementById('userInput');
-const sendBtn            = document.getElementById('sendBtn');
-const charCount          = document.getElementById('charCount');
-
-const settingsModal      = document.getElementById('settingsModal');
-const settingsClose      = document.getElementById('settingsClose');
-const settingsCancelBtn  = document.getElementById('settingsCancelBtn');
-const saveSettingsBtn    = document.getElementById('saveSettingsBtn');
-const apiKeyInput        = document.getElementById('apiKeyInput');
-const toggleApiKey       = document.getElementById('toggleApiKey');
-const modelSelect        = document.getElementById('modelSelect');
-const systemPromptInput  = document.getElementById('systemPromptInput');
-
-const toast              = document.getElementById('toast');
-
-// ── Init ───────────────────────────────────────────────────
+/* ══════════════════════════════════════════════════════════════
+   INIT
+══════════════════════════════════════════════════════════════ */
 function init() {
-  loadSettings();
-  loadHistory();
-  renderHistoryList();
-  setupEventListeners();
-  autoResizeTextarea();
+  apiKey   = localStorage.getItem(STORAGE_KEY_API) || '';
+  sessions = JSON.parse(localStorage.getItem(STORAGE_KEY_HIST) || '[]');
 
-  // Configure marked
-  marked.setOptions({
-    breaks: true,
-    gfm: true,
-    highlight: (code, lang) => {
-      if (lang && hljs.getLanguage(lang)) {
-        return hljs.highlight(code, { language: lang }).value;
-      }
-      return hljs.highlightAuto(code).value;
-    }
-  });
+  if (!apiKey) showModal();
+  else         closeModal();
 
-  // Show prompt if no API key
-  if (!settings.apiKey) {
-    setTimeout(() => openSettings(), 600);
-  }
+  renderHistory();
+  bindEvents();
 }
 
-// ── Settings ───────────────────────────────────────────────
-function loadSettings() {
-  const stored = localStorage.getItem(STORAGE_KEY_SETTINGS);
-  if (stored) {
-    try { settings = { ...settings, ...JSON.parse(stored) }; } catch {}
-  }
-}
-
-function saveSettings() {
-  localStorage.setItem(STORAGE_KEY_SETTINGS, JSON.stringify(settings));
-}
-
-// ── History ────────────────────────────────────────────────
-function loadHistory() {
-  const stored = localStorage.getItem(STORAGE_KEY_HISTORY);
-  if (stored) {
-    try { conversationHistory = JSON.parse(stored); } catch {}
-  }
-}
-
-function saveHistory() {
-  // Keep only last MAX_HISTORY_ITEMS
-  if (conversationHistory.length > MAX_HISTORY_ITEMS) {
-    conversationHistory = conversationHistory.slice(-MAX_HISTORY_ITEMS);
-  }
-  localStorage.setItem(STORAGE_KEY_HISTORY, JSON.stringify(conversationHistory));
-}
-
-function renderHistoryList() {
-  historyList.innerHTML = '';
-  const sorted = [...conversationHistory].reverse();
-  if (sorted.length === 0) {
-    historyList.innerHTML = '<p style="font-size:12px;color:var(--text-muted);padding:12px 10px;">No conversations yet.</p>';
-    return;
-  }
-  sorted.forEach(conv => {
-    const item = document.createElement('div');
-    item.className = 'history-item' + (conv.id === activeConvId ? ' active' : '');
-    item.dataset.id = conv.id;
-    item.innerHTML = `
-      <span class="history-item-icon">💬</span>
-      <span class="history-item-text" title="${escapeHtml(conv.title)}">${escapeHtml(conv.title)}</span>
-      <button class="history-item-del" data-id="${conv.id}" title="Delete">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-        </svg>
-      </button>`;
-    item.addEventListener('click', e => {
-      if (e.target.closest('.history-item-del')) return;
-      loadConversation(conv.id);
-    });
-    item.querySelector('.history-item-del').addEventListener('click', e => {
-      e.stopPropagation();
-      deleteConversation(conv.id);
-    });
-    historyList.appendChild(item);
-  });
-}
-
-function createNewConversation() {
-  activeConvId = genId();
-  activeMsgs   = [];
-  showWelcome(true);
-  renderHistoryList();
-}
-
-function loadConversation(id) {
-  const conv = conversationHistory.find(c => c.id === id);
-  if (!conv) return;
-  activeConvId = id;
-  activeMsgs   = conv.messages || [];
-  showWelcome(false);
-  messagesContainer.innerHTML = '';
-  activeMsgs.forEach(msg => renderMessage(msg.role, msg.content, false));
-  scrollToBottom();
-  renderHistoryList();
-  closeMobileSidebar();
-}
-
-function deleteConversation(id) {
-  conversationHistory = conversationHistory.filter(c => c.id !== id);
-  saveHistory();
-  if (activeConvId === id) createNewConversation();
-  else renderHistoryList();
-  showToast('Conversation deleted');
-}
-
-function saveCurrentConversation() {
-  if (!activeConvId || activeMsgs.length === 0) return;
-  const existing = conversationHistory.find(c => c.id === activeConvId);
-  const title = deriveTitle(activeMsgs);
-  if (existing) {
-    existing.messages = activeMsgs;
-    existing.title    = title;
-    existing.ts       = Date.now();
-  } else {
-    conversationHistory.push({ id: activeConvId, title, messages: activeMsgs, ts: Date.now() });
-  }
-  saveHistory();
-  renderHistoryList();
-}
-
-function deriveTitle(msgs) {
-  const first = msgs.find(m => m.role === 'user');
-  if (!first) return 'New Chat';
-  return first.content.slice(0, 52) + (first.content.length > 52 ? '…' : '');
-}
-
-// ── UI helpers ─────────────────────────────────────────────
-function showWelcome(show) {
-  welcomeScreen.style.display       = show ? 'flex' : 'none';
-  messagesContainer.style.display   = show ? 'none' : 'flex';
-}
-
-function scrollToBottom(smooth = true) {
-  chatArea.scrollTo({ top: chatArea.scrollHeight, behavior: smooth ? 'smooth' : 'instant' });
-}
-
-function showToast(msg, duration = 2500) {
-  toast.textContent = msg;
-  toast.classList.add('show');
-  setTimeout(() => toast.classList.remove('show'), duration);
-}
-
-function openSettings() {
-  apiKeyInput.value        = settings.apiKey;
-  modelSelect.value        = settings.model;
-  systemPromptInput.value  = settings.systemPrompt;
-  settingsModal.classList.add('open');
-  setTimeout(() => apiKeyInput.focus(), 100);
-}
-
-function closeSettings() {
-  settingsModal.classList.remove('open');
-}
-
-function toggleSidebar() {
-  sidebar.classList.toggle('collapsed');
-}
-
-function closeMobileSidebar() {
-  sidebar.classList.remove('mobile-open');
-}
-
-// ── Render a message ───────────────────────────────────────
-function renderMessage(role, content, animate = true) {
-  const row = document.createElement('div');
-  row.className = `message-row ${role === 'user' ? 'user-row' : 'ai-row'}`;
-  if (!animate) row.style.animation = 'none';
-
-  if (role === 'user') {
-    row.innerHTML = `<div class="user-bubble">${escapeHtml(content)}</div>`;
-  } else {
-    const html = renderMarkdown(content);
-    row.innerHTML = `
-      <div class="ai-message-wrap">
-        <div class="ai-avatar">✦</div>
-        <div>
-          <div class="ai-bubble">${html}</div>
-          <div class="msg-actions">
-            <button class="msg-action-btn copy-resp-btn" title="Copy response">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
-              </svg> Copy
-            </button>
-          </div>
-        </div>
-      </div>`;
-    row.querySelector('.copy-resp-btn').addEventListener('click', () => {
-      copyToClipboard(content);
-      showToast('Copied to clipboard!');
-    });
-  }
-
-  messagesContainer.appendChild(row);
-  initCodeCopyBtns(row);
-  return row;
-}
-
-function renderMarkdown(content) {
-  // Parse markdown
-  let html = marked.parse(content);
-  // Sanitize
-  html = DOMPurify.sanitize(html);
-  // Wrap code blocks with header
-  html = html.replace(/<pre><code class="language-(\w+)">([\s\S]*?)<\/code><\/pre>/g, (_, lang, code) => {
-    return `<pre><div class="code-header"><span class="code-lang">${lang}</span><button class="copy-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> Copy</button></div><code class="language-${lang}">${code}</code></pre>`;
-  });
-  html = html.replace(/<pre><code>([\s\S]*?)<\/code><\/pre>/g, (_, code) => {
-    return `<pre><div class="code-header"><span class="code-lang">code</span><button class="copy-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> Copy</button></div><code>${code}</code></pre>`;
-  });
-  return html;
-}
-
-function initCodeCopyBtns(container) {
-  container.querySelectorAll('.copy-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const code = btn.closest('pre').querySelector('code').innerText;
-      copyToClipboard(code);
-      btn.classList.add('copied');
-      btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Copied!`;
-      setTimeout(() => {
-        btn.classList.remove('copied');
-        btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> Copy`;
-      }, 2000);
-    });
-  });
-}
-
-// Typing indicator bubble
-function addTypingIndicator() {
-  const row = document.createElement('div');
-  row.className = 'message-row ai-row';
-  row.id = 'typingRow';
-  row.innerHTML = `
-    <div class="ai-message-wrap">
-      <div class="ai-avatar">✦</div>
-      <div class="ai-bubble">
-        <div class="typing-indicator">
-          <div class="typing-dot"></div>
-          <div class="typing-dot"></div>
-          <div class="typing-dot"></div>
-        </div>
-      </div>
-    </div>`;
-  messagesContainer.appendChild(row);
-  scrollToBottom();
-  return row;
-}
-
-function removeTypingIndicator() {
-  const row = document.getElementById('typingRow');
-  if (row) row.remove();
-}
-
-// ── Gemini API call ────────────────────────────────────────
-async function callGemini(userText) {
-  if (!settings.apiKey) {
-    openSettings();
-    throw new Error('No API key set. Please add your Gemini API key in Settings.');
-  }
-
-  // Build contents array: include conversation history for context
-  const contents = activeMsgs.map(m => ({
-    role: m.role === 'user' ? 'user' : 'model',
-    parts: [{ text: m.content }]
-  }));
-  // Add current user message
-  contents.push({ role: 'user', parts: [{ text: userText }] });
-
-  const body = {
-    contents,
-    generationConfig: {
-      temperature:     0.8,
-      topP:            0.95,
-      topK:            40,
-      maxOutputTokens: 8192
-    }
-  };
-
-  // Add system instruction if set
-  if (settings.systemPrompt) {
-    body.systemInstruction = { parts: [{ text: settings.systemPrompt }] };
-  }
-
-  const url = `${GEMINI_BASE}/${settings.model}:generateContent?key=${settings.apiKey}`;
-
-  const res = await fetch(url, {
-    method:  'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body:    JSON.stringify(body)
-  });
-
-  if (!res.ok) {
-    const errData = await res.json().catch(() => ({}));
-    const errMsg  = errData?.error?.message || `HTTP ${res.status}`;
-    throw new Error(errMsg);
-  }
-
-  const data = await res.json();
-
-  // Handle safety blocks
-  if (data.promptFeedback?.blockReason) {
-    throw new Error(`Request blocked: ${data.promptFeedback.blockReason}`);
-  }
-
-  const candidate = data.candidates?.[0];
-  if (!candidate) throw new Error('No response from Gemini.');
-  if (candidate.finishReason === 'SAFETY') throw new Error('Response blocked due to safety filters.');
-
-  return candidate.content?.parts?.[0]?.text || '';
-}
-
-// ── Send Message ───────────────────────────────────────────
-async function sendMessage(text) {
-  text = text.trim();
-  if (!text || isGenerating) return;
-
-  // First message — create conversation if needed
-  if (!activeConvId) {
-    activeConvId = genId();
-    activeMsgs   = [];
-  }
-
-  // Hide welcome, show messages
-  showWelcome(false);
-
-  // Render user message
-  activeMsgs.push({ role: 'user', content: text });
-  renderMessage('user', text);
-  scrollToBottom();
-
-  // Clear input
-  userInput.value = '';
-  userInput.style.height = 'auto';
-  charCount.textContent = '0';
-
-  // Lock UI
-  isGenerating = true;
-  sendBtn.disabled = true;
-
-  const typingRow = addTypingIndicator();
-
-  try {
-    const aiText = await callGemini(text);
-    removeTypingIndicator();
-
-    activeMsgs.push({ role: 'assistant', content: aiText });
-    renderMessage('assistant', aiText);
-    scrollToBottom();
-
-    // Save to history
-    saveCurrentConversation();
-  } catch (err) {
-    removeTypingIndicator();
-    const errRow = document.createElement('div');
-    errRow.className = 'message-row ai-row';
-    errRow.innerHTML = `
-      <div class="ai-message-wrap">
-        <div class="ai-avatar" style="background:linear-gradient(135deg,#ef4444,#f97316)">⚠</div>
-        <div class="ai-bubble" style="border-color:rgba(239,68,68,0.3);color:#fca5a5;">
-          <strong>Error:</strong> ${escapeHtml(err.message)}
-        </div>
-      </div>`;
-    messagesContainer.appendChild(errRow);
-    scrollToBottom();
-  } finally {
-    isGenerating    = false;
-    sendBtn.disabled = false;
-    userInput.focus();
-  }
-}
-
-// ── Export ─────────────────────────────────────────────────
-function exportConversation() {
-  if (activeMsgs.length === 0) { showToast('Nothing to export yet.'); return; }
-  const lines = activeMsgs.map(m =>
-    `**${m.role === 'user' ? 'You' : 'Crystal'}:**\n${m.content}\n`
-  );
-  const md = `# Crystal AI — Conversation Export\n_Exported on ${new Date().toLocaleString()}_\n\n---\n\n${lines.join('\n---\n\n')}`;
-  const blob = new Blob([md], { type: 'text/markdown' });
-  const url  = URL.createObjectURL(blob);
-  const a    = document.createElement('a');
-  a.href = url; a.download = `crystal-chat-${Date.now()}.md`;
-  a.click();
-  URL.revokeObjectURL(url);
-  showToast('Conversation exported!');
-}
-
-// ── Event Listeners ────────────────────────────────────────
-function setupEventListeners() {
+/* ══════════════════════════════════════════════════════════════
+   EVENTS
+══════════════════════════════════════════════════════════════ */
+function bindEvents() {
   // Send on button click
-  sendBtn.addEventListener('click', () => sendMessage(userInput.value));
+  btnSend.addEventListener('click', handleSend);
 
-  // Send on Enter (Shift+Enter = new line)
+  // Send on Enter (Shift+Enter = newline)
   userInput.addEventListener('keydown', e => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      sendMessage(userInput.value);
+      handleSend();
     }
   });
 
-  // Auto-resize textarea + char count
+  // Auto-resize textarea
   userInput.addEventListener('input', () => {
-    autoResizeTextarea();
-    charCount.textContent = userInput.value.length;
-  });
-
-  // Sidebar toggles
-  sidebarToggle.addEventListener('click', toggleSidebar);
-  mobileSidebarToggle.addEventListener('click', () => {
-    sidebar.classList.toggle('mobile-open');
+    userInput.style.height = 'auto';
+    userInput.style.height = Math.min(userInput.scrollHeight, 200) + 'px';
+    btnSend.disabled = !userInput.value.trim();
   });
 
   // New chat
-  newChatBtn.addEventListener('click', createNewConversation);
+  btnNewChat.addEventListener('click', startNewChat);
 
-  // Clear history
-  clearHistoryBtn.addEventListener('click', () => {
-    if (conversationHistory.length === 0) { showToast('No history to clear.'); return; }
-    if (confirm('Clear all conversation history? This cannot be undone.')) {
-      conversationHistory = [];
-      saveHistory();
-      createNewConversation();
-      showToast('History cleared');
-    }
+  // Clear all
+  btnClearAll.addEventListener('click', () => {
+    if (!sessions.length) return;
+    sessions = [];
+    activeSession = null;
+    saveSessions();
+    renderHistory();
+    showWelcome();
+    showToast('All history cleared', 'success');
   });
 
-  // Settings
-  settingsBtn.addEventListener('click', openSettings);
-  settingsClose.addEventListener('click', closeSettings);
-  settingsCancelBtn.addEventListener('click', closeSettings);
-  settingsModal.addEventListener('click', e => { if (e.target === settingsModal) closeSettings(); });
-
-  // Save settings
-  saveSettingsBtn.addEventListener('click', () => {
-    const key = apiKeyInput.value.trim();
-    if (!key) { showToast('Please enter an API key.'); apiKeyInput.focus(); return; }
-    settings.apiKey       = key;
-    settings.model        = modelSelect.value;
-    settings.systemPrompt = systemPromptInput.value.trim() || settings.systemPrompt;
-    saveSettings();
-    closeSettings();
-    showToast('Settings saved!');
-    // Update model badge
-    document.querySelector('.model-badge').innerHTML =
-      `<span class="model-dot"></span>${modelSelect.options[modelSelect.selectedIndex].text.split(' (')[0]}`;
+  // Sidebar toggle
+  btnSidebarTog.addEventListener('click', () => {
+    sidebar.classList.toggle('collapsed');
+    const expanded = !sidebar.classList.contains('collapsed');
+    btnSidebarTog.setAttribute('aria-expanded', String(expanded));
   });
 
-  // Toggle API key visibility
-  toggleApiKey.addEventListener('click', () => {
-    const isPassword = apiKeyInput.type === 'password';
-    apiKeyInput.type = isPassword ? 'text' : 'password';
-  });
-
-  // Export
-  exportBtn.addEventListener('click', exportConversation);
+  // Export chat
+  btnExport.addEventListener('click', exportChat);
 
   // Suggestion cards
   document.querySelectorAll('.suggestion-card').forEach(card => {
     card.addEventListener('click', () => {
-      const prompt = card.dataset.prompt;
-      userInput.value = prompt;
-      charCount.textContent = prompt.length;
-      autoResizeTextarea();
-      sendMessage(prompt);
+      userInput.value = card.dataset.prompt;
+      userInput.style.height = 'auto';
+      userInput.style.height = Math.min(userInput.scrollHeight, 200) + 'px';
+      btnSend.disabled = false;
+      userInput.focus();
+      handleSend();
     });
   });
 
-  // Keyboard shortcuts
-  document.addEventListener('keydown', e => {
-    const mod = e.ctrlKey || e.metaKey;
-    if (mod && e.key === '/') { e.preventDefault(); toggleSidebar(); }
-    if (mod && e.key === 'n') { e.preventDefault(); createNewConversation(); }
-    if (mod && e.key === ',') { e.preventDefault(); openSettings(); }
-    if (e.key === 'Escape')   { closeSettings(); }
+  // API Key modal
+  btnSaveKey.addEventListener('click', saveApiKey);
+  apiKeyInput.addEventListener('keydown', e => { if (e.key === 'Enter') saveApiKey(); });
+  btnToggleKey.addEventListener('click', () => {
+    const isPass = apiKeyInput.type === 'password';
+    apiKeyInput.type = isPass ? 'text' : 'password';
   });
 }
 
-// ── Textarea auto-resize ───────────────────────────────────
-function autoResizeTextarea() {
+/* ══════════════════════════════════════════════════════════════
+   SESSION MANAGEMENT
+══════════════════════════════════════════════════════════════ */
+function createSession(firstMessage) {
+  const session = {
+    id: Date.now().toString(),
+    title: firstMessage.slice(0, 50) || 'New Chat',
+    messages: [],
+    created: Date.now()
+  };
+  sessions.unshift(session);
+  activeSession = session;
+  saveSessions();
+  renderHistory();
+  return session;
+}
+
+function loadSession(id) {
+  const session = sessions.find(s => s.id === id);
+  if (!session) return;
+  activeSession = session;
+  renderHistory();
+  renderSessionMessages();
+}
+
+function deleteSession(id) {
+  sessions = sessions.filter(s => s.id !== id);
+  if (activeSession && activeSession.id === id) {
+    activeSession = null;
+    showWelcome();
+  }
+  saveSessions();
+  renderHistory();
+}
+
+function saveSessions() {
+  // Keep max 50 sessions
+  if (sessions.length > 50) sessions = sessions.slice(0, 50);
+  localStorage.setItem(STORAGE_KEY_HIST, JSON.stringify(sessions));
+}
+
+/* ══════════════════════════════════════════════════════════════
+   RENDER HISTORY SIDEBAR
+══════════════════════════════════════════════════════════════ */
+function renderHistory() {
+  historyList.innerHTML = '';
+  if (!sessions.length) {
+    historyList.innerHTML = '<li style="padding:10px 10px;color:var(--text-3);font-size:12.5px;">No conversations yet</li>';
+    return;
+  }
+  sessions.forEach(session => {
+    const li = document.createElement('li');
+    li.className = 'history-item' + (activeSession && activeSession.id === session.id ? ' active' : '');
+    li.setAttribute('role', 'listitem');
+    li.innerHTML = `
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+      <span class="history-item-label" title="${escHtml(session.title)}">${escHtml(session.title)}</span>
+      <button class="btn-del" aria-label="Delete conversation" title="Delete">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M9 6V4h6v2"/></svg>
+      </button>`;
+    li.querySelector('.history-item-label').addEventListener('click', () => loadSession(session.id));
+    li.querySelector('.btn-del').addEventListener('click', e => {
+      e.stopPropagation();
+      deleteSession(session.id);
+    });
+    historyList.appendChild(li);
+  });
+}
+
+/* ══════════════════════════════════════════════════════════════
+   WELCOME / CLEAR CHAT VIEW
+══════════════════════════════════════════════════════════════ */
+function showWelcome() {
+  chatContainer.innerHTML = '';
+  chatContainer.appendChild(welcomeScreen);
+  welcomeScreen.style.display = 'flex';
+  // Re-bind suggestion cards
+  chatContainer.querySelectorAll('.suggestion-card').forEach(card => {
+    card.addEventListener('click', () => {
+      userInput.value = card.dataset.prompt;
+      userInput.dispatchEvent(new Event('input'));
+      handleSend();
+    });
+  });
+}
+
+function startNewChat() {
+  activeSession = null;
+  chatContainer.innerHTML = '';
+  const ws = welcomeScreen.cloneNode(true);
+  chatContainer.appendChild(ws);
+  ws.querySelectorAll('.suggestion-card').forEach(card => {
+    card.addEventListener('click', () => {
+      userInput.value = card.dataset.prompt;
+      userInput.dispatchEvent(new Event('input'));
+      handleSend();
+    });
+  });
+  renderHistory();
+  userInput.value = '';
   userInput.style.height = 'auto';
-  userInput.style.height = Math.min(userInput.scrollHeight, 200) + 'px';
+  btnSend.disabled = true;
+  userInput.focus();
 }
 
-// ── Utilities ──────────────────────────────────────────────
-function genId() {
-  return 'conv_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+/* ══════════════════════════════════════════════════════════════
+   RENDER SAVED SESSION
+══════════════════════════════════════════════════════════════ */
+function renderSessionMessages() {
+  chatContainer.innerHTML = '';
+  if (!activeSession || !activeSession.messages.length) { showWelcome(); return; }
+  activeSession.messages.forEach(msg => {
+    appendMessage(msg.role, msg.text, msg.time, false);
+  });
+  scrollToBottom();
 }
 
-function escapeHtml(str) {
-  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
+/* ══════════════════════════════════════════════════════════════
+   SEND MESSAGE
+══════════════════════════════════════════════════════════════ */
+async function handleSend() {
+  const text = userInput.value.trim();
+  if (!text || isStreaming) return;
+  if (!apiKey) { showModal(); return; }
 
-function copyToClipboard(text) {
-  if (navigator.clipboard) {
-    navigator.clipboard.writeText(text).catch(() => fallbackCopy(text));
-  } else {
-    fallbackCopy(text);
+  // Create session on first message
+  if (!activeSession) {
+    createSession(text);
+    chatContainer.innerHTML = '';
+  }
+
+  // Clear input
+  userInput.value = '';
+  userInput.style.height = 'auto';
+  btnSend.disabled = true;
+
+  // Save & render user message
+  const userMsg = { role: 'user', text, time: nowTime() };
+  activeSession.messages.push(userMsg);
+  saveSessions();
+  appendMessage('user', text, userMsg.time, true);
+  scrollToBottom();
+
+  // Show typing indicator
+  const typingEl = appendTyping();
+  scrollToBottom();
+
+  try {
+    isStreaming = true;
+    const reply = await callGemini(activeSession.messages);
+    typingEl.remove();
+
+    const aiMsg = { role: 'ai', text: reply, time: nowTime() };
+    activeSession.messages.push(aiMsg);
+    saveSessions();
+    renderHistory(); // update title if needed
+    appendMessage('ai', reply, aiMsg.time, true);
+    scrollToBottom();
+  } catch (err) {
+    typingEl.remove();
+    const errText = `⚠️ ${err.message || 'Something went wrong. Please try again.'}`;
+    appendMessage('ai', errText, nowTime(), true);
+    showToast(err.message || 'Error contacting Gemini', 'error');
+  } finally {
+    isStreaming = false;
+    btnSend.disabled = false;
+    userInput.focus();
   }
 }
 
-function fallbackCopy(text) {
-  const ta = document.createElement('textarea');
-  ta.value = text;
-  ta.style.position = 'fixed';
-  ta.style.opacity  = '0';
-  document.body.appendChild(ta);
-  ta.select();
-  document.execCommand('copy');
-  document.body.removeChild(ta);
+/* ══════════════════════════════════════════════════════════════
+   GEMINI API CALL
+══════════════════════════════════════════════════════════════ */
+async function callGemini(messages) {
+  // Build contents array (Gemini format)
+  const contents = messages.map(m => ({
+    role: m.role === 'user' ? 'user' : 'model',
+    parts: [{ text: m.text }]
+  }));
+
+  // System instruction
+  const systemInstruction = {
+    parts: [{
+      text: `You are Crystal, a brilliant, friendly, and articulate AI assistant. 
+You provide clear, accurate, and well-structured answers. 
+Format your responses using Markdown when helpful — use code blocks for code, 
+bullet points for lists, and headings for long structured content.
+Be concise but comprehensive. Always be helpful and positive.`
+    }]
+  };
+
+  const url = `${API_BASE}/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
+
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      system_instruction: systemInstruction,
+      contents,
+      generationConfig: {
+        temperature: 0.9,
+        topK: 40,
+        topP: 0.95,
+        maxOutputTokens: 8192
+      },
+      safetySettings: [
+        { category: 'HARM_CATEGORY_HARASSMENT',        threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+        { category: 'HARM_CATEGORY_HATE_SPEECH',       threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+        { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+        { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' }
+      ]
+    })
+  });
+
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    const msg = errData?.error?.message || `HTTP ${res.status}`;
+    if (res.status === 400 && msg.includes('API key')) throw new Error('Invalid API key. Please update it.');
+    if (res.status === 429) throw new Error('Rate limit reached. Please wait a moment.');
+    throw new Error(msg);
+  }
+
+  const data = await res.json();
+  const candidate = data?.candidates?.[0];
+  if (!candidate) throw new Error('No response from Gemini. Try again.');
+
+  // Handle blocked/finish reasons
+  if (candidate.finishReason === 'SAFETY') throw new Error('Response blocked due to safety filters.');
+
+  return candidate.content?.parts?.map(p => p.text).join('') || 'No response text.';
 }
 
-// ── Start ──────────────────────────────────────────────────
-document.addEventListener('DOMContentLoaded', init);
+/* ══════════════════════════════════════════════════════════════
+   APPEND MESSAGE TO DOM
+══════════════════════════════════════════════════════════════ */
+function appendMessage(role, text, time, animate) {
+  const isAI = role === 'ai';
+  const div  = document.createElement('div');
+  div.className = 'message';
+
+  div.innerHTML = `
+    <div class="avatar ${isAI ? 'avatar-ai' : 'avatar-user'}" aria-hidden="true">
+      ${isAI ? '✦' : '👤'}
+    </div>
+    <div class="message-content">
+      <div class="message-meta">
+        <span class="message-name">${isAI ? 'Crystal' : 'You'}</span>
+        <span class="message-time">${time}</span>
+      </div>
+      <div class="bubble ${isAI ? 'bubble-ai' : 'bubble-user'}">
+        ${isAI ? renderMarkdown(text) : escHtml(text).replace(/\n/g, '<br>')}
+      </div>
+      ${isAI ? `
+      <div class="message-actions">
+        <button class="btn-copy" aria-label="Copy response">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+          Copy
+        </button>
+      </div>` : ''}
+    </div>`;
+
+  // Copy button
+  const btnCopy = div.querySelector('.btn-copy');
+  if (btnCopy) {
+    btnCopy.addEventListener('click', () => {
+      navigator.clipboard.writeText(text).then(() => {
+        btnCopy.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Copied!`;
+        showToast('Copied to clipboard', 'success');
+        setTimeout(() => {
+          btnCopy.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> Copy`;
+        }, 2000);
+      });
+    });
+  }
+
+  // Code copy buttons
+  div.querySelectorAll('.btn-copy-code').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const code = btn.closest('.code-block').querySelector('pre').textContent;
+      navigator.clipboard.writeText(code).then(() => {
+        btn.textContent = '✓ Copied';
+        setTimeout(() => btn.textContent = 'Copy', 2000);
+      });
+    });
+  });
+
+  if (animate) div.style.animation = 'fadeUp .35s ease';
+  chatContainer.appendChild(div);
+  return div;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   TYPING INDICATOR
+══════════════════════════════════════════════════════════════ */
+function appendTyping() {
+  const div = document.createElement('div');
+  div.className = 'message';
+  div.id = 'typing-indicator';
+  div.innerHTML = `
+    <div class="avatar avatar-ai" aria-hidden="true">✦</div>
+    <div class="message-content">
+      <div class="message-meta">
+        <span class="message-name">Crystal</span>
+        <span class="message-time">Thinking…</span>
+      </div>
+      <div class="typing-indicator" role="status" aria-label="Crystal is thinking">
+        <span class="typing-dot"></span>
+        <span class="typing-dot"></span>
+        <span class="typing-dot"></span>
+      </div>
+    </div>`;
+  chatContainer.appendChild(div);
+  return div;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   MARKDOWN RENDERER (lightweight, no deps)
+══════════════════════════════════════════════════════════════ */
+function renderMarkdown(text) {
+  // Escape HTML first (except inside code blocks)
+  const lines = text.split('\n');
+  let html = '';
+  let inCodeBlock = false;
+  let codeLang = '';
+  let codeLines = [];
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+
+    // Detect fenced code blocks
+    if (/^```(\w*)/.test(line)) {
+      if (!inCodeBlock) {
+        inCodeBlock = true;
+        codeLang = line.match(/^```(\w*)/)[1] || 'code';
+        codeLines = [];
+      } else {
+        // Close code block
+        inCodeBlock = false;
+        const codeHtml = escHtml(codeLines.join('\n'));
+        html += `<div class="code-block">
+          <div class="code-block-header">
+            <span class="code-block-lang">${escHtml(codeLang)}</span>
+            <button class="btn-copy-code">Copy</button>
+          </div>
+          <pre><code>${codeHtml}</code></pre>
+        </div>`;
+        codeLang = ''; codeLines = [];
+      }
+      continue;
+    }
+
+    if (inCodeBlock) { codeLines.push(line); continue; }
+
+    // Inline formatting
+    let l = escHtml(line);
+
+    // Headings
+    if (/^######\s/.test(l))      { html += `<h6>${l.slice(7)}</h6>`; continue; }
+    if (/^#####\s/.test(l))       { html += `<h5>${l.slice(6)}</h5>`; continue; }
+    if (/^####\s/.test(l))        { html += `<h4>${l.slice(5)}</h4>`; continue; }
+    if (/^###\s/.test(l))         { html += `<h3>${l.slice(4)}</h3>`; continue; }
+    if (/^##\s/.test(l))          { html += `<h2>${l.slice(3)}</h2>`; continue; }
+    if (/^#\s/.test(l))           { html += `<h1>${l.slice(2)}</h1>`; continue; }
+
+    // Horizontal rule
+    if (/^---+$/.test(l.trim()))  { html += '<hr>'; continue; }
+
+    // Blockquote
+    if (/^&gt;\s/.test(l))        { html += `<blockquote>${applyInline(l.slice(5))}</blockquote>`; continue; }
+
+    // Unordered list
+    if (/^[*\-]\s/.test(l))       { html += `<ul><li>${applyInline(l.slice(2))}</li></ul>`; continue; }
+
+    // Ordered list
+    if (/^\d+\.\s/.test(l))       { html += `<ol><li>${applyInline(l.replace(/^\d+\.\s/, ''))}</li></ol>`; continue; }
+
+    // Empty line → paragraph break
+    if (l.trim() === '')          { html += '<br>'; continue; }
+
+    // Regular paragraph
+    html += `<p>${applyInline(l)}</p>`;
+  }
+
+  // Merge consecutive ul/ol tags
+  html = html.replace(/<\/ul>\s*<ul>/g, '').replace(/<\/ol>\s*<ol>/g, '');
+
+  return html;
+}
+
+function applyInline(text) {
+  return text
+    .replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+    .replace(/__(.+?)__/g, '<strong>$1</strong>')
+    .replace(/_(.+?)_/g, '<em>$1</em>')
+    .replace(/~~(.+?)~~/g, '<del>$1</del>')
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/\[(.+?)\]\((.+?)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+}
+
+/* ══════════════════════════════════════════════════════════════
+   EXPORT CHAT
+══════════════════════════════════════════════════════════════ */
+function exportChat() {
+  if (!activeSession || !activeSession.messages.length) {
+    showToast('No conversation to export', 'error'); return;
+  }
+  let content = `# Crystal AI Chat — ${activeSession.title}\nExported: ${new Date().toLocaleString()}\n\n`;
+  activeSession.messages.forEach(m => {
+    content += `**${m.role === 'user' ? 'You' : 'Crystal'}** (${m.time}):\n${m.text}\n\n---\n\n`;
+  });
+  const blob = new Blob([content], { type: 'text/markdown' });
+  const a    = document.createElement('a');
+  a.href     = URL.createObjectURL(blob);
+  a.download = `crystal-chat-${Date.now()}.md`;
+  a.click();
+  showToast('Chat exported as Markdown', 'success');
+}
+
+/* ══════════════════════════════════════════════════════════════
+   API KEY MODAL
+══════════════════════════════════════════════════════════════ */
+function showModal() {
+  apiModal.classList.remove('hidden');
+  setTimeout(() => apiKeyInput.focus(), 300);
+}
+function closeModal() {
+  apiModal.classList.add('hidden');
+}
+function saveApiKey() {
+  const key = apiKeyInput.value.trim();
+  if (!key || !key.startsWith('AIza')) {
+    showToast('Please enter a valid Gemini API key (starts with AIza…)', 'error'); return;
+  }
+  apiKey = key;
+  localStorage.setItem(STORAGE_KEY_API, apiKey);
+  closeModal();
+  showToast('API key saved! Welcome to Crystal ✦', 'success');
+  userInput.focus();
+}
+
+/* ══════════════════════════════════════════════════════════════
+   UTILITIES
+══════════════════════════════════════════════════════════════ */
+function scrollToBottom() {
+  const section = document.querySelector('.chat-section');
+  section.scrollTo({ top: section.scrollHeight, behavior: 'smooth' });
+}
+
+function nowTime() {
+  return new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+function escHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+let toastTimer;
+function showToast(message, type = '') {
+  clearTimeout(toastTimer);
+  toast.textContent = message;
+  toast.className   = `toast show ${type}`;
+  toastTimer = setTimeout(() => toast.classList.remove('show'), 3000);
+}
+
+/* ── Boot ── */
+init();
