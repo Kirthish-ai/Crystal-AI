@@ -1,170 +1,87 @@
-# ✦ Crystal — AI Chat Application
+# ✦ Crystal AI
 
-<div align="center">
-
-![Crystal AI Chat](https://img.shields.io/badge/Crystal-AI%20Chat-7c6fff?style=for-the-badge&logo=google&logoColor=white)
-![HTML](https://img.shields.io/badge/HTML5-E34F26?style=for-the-badge&logo=html5&logoColor=white)
-![CSS](https://img.shields.io/badge/CSS3-1572B6?style=for-the-badge&logo=css3&logoColor=white)
-![JavaScript](https://img.shields.io/badge/JavaScript-F7DF1E?style=for-the-badge&logo=javascript&logoColor=black)
-![Gemini](https://img.shields.io/badge/Google%20Gemini-4285F4?style=for-the-badge&logo=google&logoColor=white)
-
-**A stunning, dark-themed AI chat application powered by Google Gemini 2.0 Flash.**  
-Ask anything. Get intelligent answers. Built with pure HTML, CSS & JavaScript — no frameworks, no build tools.
-
-</div>
+**Crystal AI** is a stunning, premium single-page AI chat application featuring a dark glassmorphism design. It leverages the blazing-fast **Groq API** and the powerful **Llama 3.3 (70B)** model to provide intelligent, real-time responses. Built entirely with Vanilla HTML, CSS, and JavaScript—no build steps or complex frameworks required.
 
 ---
 
-## 🌟 Features
+## ✨ Features
 
-| Feature | Description |
-|---|---|
-| 🤖 **Gemini 2.0 Flash** | Powered by Google's latest and fastest AI model |
-| 🌙 **Dark Glassmorphism UI** | Premium dark theme with animated gradient orbs |
-| 💬 **Multi-session History** | Create, switch between, and delete multiple conversations |
-| 📝 **Markdown Rendering** | Full markdown support — code blocks, lists, headings, bold/italic |
-| 📋 **Copy to Clipboard** | Copy any AI response or code block with one click |
-| 💾 **Local Persistence** | All chats saved in browser localStorage — no server needed |
-| 📤 **Export Chat** | Download any conversation as a Markdown file |
-| ✨ **Suggestion Cards** | Quick-start prompts on the welcome screen |
-| ⌨️ **Keyboard Shortcuts** | `Enter` to send · `Shift+Enter` for newline |
-| 📱 **Responsive Design** | Works great on desktop and mobile |
-| 🔒 **Privacy First** | API key stored only in your browser, never on any server |
+- **Premium Glassmorphism UI:** A sleek, dark-themed interface with frosted glass effects, subtle hover interactions, and animated background orbs.
+- **Llama 3.3 via Groq:** Ultra-fast, highly capable AI responses using the `llama-3.3-70b-versatile` model.
+- **Authentication Flow:** Includes a beautifully designed `login.html` demo page that simulates authentication and protects the main chat interface.
+- **Dynamic Loading Animations:** A custom "running light" gradient indicator and pulsing Crystal logo display while responses are being generated.
+- **Persistent Chat History:** Conversations are automatically saved to your browser's `localStorage` and can be accessed or cleared from the collapsible sidebar.
+- **Rich Markdown Rendering:** Seamlessly renders bold text, italics, headers, lists, and blockquotes natively without heavy external libraries. 
+- **Code Block Support:** Code snippets are styled beautifully with a dark monospace block and include a handy one-click "Copy" button.
+- **Export Conversations:** Instantly download any of your active chat sessions as a formatted Markdown (`.md`) file.
+- **Fully Responsive:** Carefully crafted to work perfectly across desktop, tablet, and mobile devices.
+- **Profile & Actions:** Sleek top navigation bar featuring model badges, a user profile icon, and quick-action buttons.
 
 ---
 
-## 🎬 Demo
+## 🚀 Quick Setup
 
-> 📹 See `demo.mp4` in this repository for a full walkthrough of the app.
+Crystal AI is built with vanilla web technologies, making it incredibly easy to run.
 
----
-
-## 🚀 Getting Started
-
-### Prerequisites
-
-- A modern web browser (Chrome, Firefox, Edge, Safari)
-- A free **Google Gemini API key** — get one at [Google AI Studio](https://aistudio.google.com/app/apikey)
-
-### Setup (2 steps)
-
-**1. Clone the repository**
-
+### 1. Clone the Repository
 ```bash
-git clone https://github.com/YOUR_USERNAME/Crystal.git
-cd Crystal
+git clone https://github.com/your-username/crystal-ai.git
+cd crystal-ai
 ```
 
-**2. Open in browser**
-
-```bash
-# Option A — Just open the file
-open index.html
-
-# Option B — Use a local server (recommended)
-npx serve .
-# Then visit http://localhost:3000
+### 2. Configure the API Key
+The application currently looks for a Groq API key in your `script.js` file. To set it up with your own key:
+1. Open `script.js` in your code editor.
+2. Locate the `callGemini()` function (the function handles the API logic).
+3. Replace the fallback string with your actual API key:
+```javascript
+const API_KEY = localStorage.getItem('crystal_api_key') || "YOUR_GROQ_API_KEY_HERE";
 ```
+*Get your free API key from the [GroqCloud Console](https://console.groq.com/).*
 
-**3. Enter your API key**
-
-When the app opens, a dialog will ask for your Gemini API key.  
-Paste your key (starts with `AIza…`) and click **"Start Chatting ✦"**.
-
-> Your key is stored only in `localStorage` — it never leaves your browser.
-
----
-
-## 🗂️ Project Structure
-
-```
-Crystal/
-├── index.html      # App shell — layout, modal, welcome screen
-├── style.css       # Dark glassmorphism design system
-├── script.js       # All logic — API calls, sessions, markdown, UI
-├── README.md       # This file
-└── demo.mp4        # Video demonstration
-```
+### 3. Run the App
+Since the application uses standard JavaScript `fetch` calls, it is highly recommended to run it through a local web server to avoid browser CORS restrictions.
+- **Using VS Code:** Install the "Live Server" extension, right-click `login.html` or `index.html`, and select "Open with Live Server".
+- **Using Python:**
+  Open your terminal, navigate to the project directory, and run:
+  ```bash
+  python3 -m http.server 8080
+  ```
+  Then open `http://localhost:8080/login.html` in your browser.
 
 ---
 
-## 🛠️ How It Works
-
-```mermaid
-graph TD
-    A[User types message] --> B[handleSend]
-    B --> C{API key set?}
-    C -- No --> D[Show API Key Modal]
-    C -- Yes --> E[Create/Update Session]
-    E --> F[Append user bubble]
-    F --> G[Show typing indicator]
-    G --> H[callGemini — Fetch API]
-    H --> I{Response OK?}
-    I -- Yes --> J[renderMarkdown]
-    J --> K[Append AI bubble]
-    K --> L[Save to localStorage]
-    I -- No --> M[Show error toast]
-```
-
----
-
-## ⌨️ Keyboard Shortcuts
-
-| Shortcut | Action |
-|---|---|
-| `Enter` | Send message |
-| `Shift + Enter` | Add new line |
-
----
-
-## 🎨 Design System
-
-The UI is built with a custom CSS design system featuring:
-
-- **Color palette** — Deep navy background (`#0a0a0f`) with purple accent (`#7c6fff`) and pink highlights (`#f472b6`)
-- **Glassmorphism** — `backdrop-filter: blur()` on sidebar, topbar, and input area
-- **Animated orbs** — Three radial gradient blobs that slowly drift in the background
-- **Micro-animations** — `fadeUp` entrance, typing bounce, glow pulse, hover lifts
-- **Typography** — Inter (UI) + Fira Code (code blocks) from Google Fonts
-
----
-
-## 🔑 Getting a Free Gemini API Key
-
-1. Go to [https://aistudio.google.com/app/apikey](https://aistudio.google.com/app/apikey)
-2. Sign in with your Google account
-3. Click **"Create API key"**
-4. Copy the key (it starts with `AIza…`)
-5. Paste it into Crystal when prompted
-
-> The free tier includes generous usage limits — plenty for personal use.
-
----
-
-## 📦 Tech Stack
+## 🛠️ Built With
 
 | Technology | Purpose |
-|---|---|
-| HTML5 | Semantic structure, ARIA accessibility |
-| CSS3 | Custom design system, animations, glassmorphism |
-| Vanilla JavaScript (ES2020+) | Logic, API integration, DOM manipulation |
-| Google Gemini API | AI response generation |
-| localStorage | Client-side persistence (no backend) |
+|------------|---------|
+| **HTML5** | Semantic structure, accessibility, and inline SVG icons |
+| **CSS3** | Glassmorphism design system, CSS variables, keyframe animations |
+| **Vanilla JS** | Application logic, API integration, DOM manipulation, custom Markdown parser |
+| **Groq API** | Extremely low-latency AI inference |
+| **Llama 3.3 70B**| State-of-the-art open-source Large Language Model |
+| **localStorage** | Client-side persistence for chat history and authentication state |
+
+---
+
+## 💡 How to Use
+1. **Sign In:** Open the app and log in via the `login.html` screen (any email/password will work for this demo).
+2. **Chat:** Type a query into the sleek input bar or click one of the suggested prompts to start a new conversation.
+3. **Manage History:** Use the left sidebar to switch between past conversations or hit "Clear All History" to wipe your data.
+4. **Copy & Export:** Hover over any AI response to copy it to your clipboard, or use the download icon in the top right to export the whole chat as a `.md` file.
+5. **Sign Out:** Click the Sign Out button in the bottom left of the sidebar to return to the login screen.
 
 ---
 
 ## 🤝 Contributing
-
-Pull requests are welcome! For major changes, please open an issue first.
-
----
+Pull requests are welcome! If you'd like to add major features (like backend database integration or actual OAuth authentication), please open an issue first to discuss what you would like to change.
 
 ## 📄 License
-
 MIT License — free to use, modify, and distribute.
 
 ---
 
 <div align="center">
-Made with ❤️ · Powered by <strong>Google Gemini 2.0 Flash</strong>
+  Made with ❤️ · Powered by <strong>Groq</strong> & <strong>Llama 3.3</strong>
 </div>
+# Crystal-AI
