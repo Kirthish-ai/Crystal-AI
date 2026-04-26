@@ -76,12 +76,4 @@ Since the application uses standard JavaScript `fetch` calls, it is highly recom
 ## 🤝 Contributing
 Pull requests are welcome! If you'd like to add major features (like backend database integration or actual OAuth authentication), please open an issue first to discuss what you would like to change.
 
-## 📄 License
-MIT License — free to use, modify, and distribute.
-
 ---
-
-<div align="center">
-  Made with ❤️ · Powered by <strong>Groq</strong> & <strong>Llama 3.3</strong>
-</div>
-# Crystal-AI
